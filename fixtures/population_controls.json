@@ -1,0 +1,53 @@
+{
+  "reference_date": "2026-11-01",
+  "households": [
+    {
+      "household": "h",
+      "region": "east",
+      "income_status": "known",
+      "child_count": 2
+    },
+    {
+      "household": "i",
+      "region": "west",
+      "income_status": "known",
+      "child_count": 1
+    },
+    {
+      "household": "missing",
+      "region": "east",
+      "income_status": "missing",
+      "child_count": 1
+    },
+    {
+      "household": "zero",
+      "region": "west",
+      "income_status": "known",
+      "child_count": 1
+    },
+    {
+      "household": "nonuser",
+      "region": "east",
+      "income_status": "known",
+      "child_count": 0
+    }
+  ],
+  "controls": [
+    {
+      "id": "region-east",
+      "dimension": "region",
+      "category": "east",
+      "target": 12
+    },
+    {
+      "id": "region-west",
+      "dimension": "region",
+      "category": "west",
+      "target": 4
+    }
+  ],
+  "multiplier_bounds": {
+    "lower": "0.25",
+    "upper": "4"
+  }
+}
