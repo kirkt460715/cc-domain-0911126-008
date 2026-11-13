@@ -5,6 +5,11 @@ from tariffs.catalog import Catalog
 from tariffs.primitives import canonical, digest, word, integer
 from analysis.engine import evaluate, verify
 from analysis.quality import audit_result
+from analysis.calibration import (
+    CalibrationError,
+    build_calibration,
+    verify_binding,
+)
 from publication.disclosure import publication_packet, validate_packet
 
 
@@ -35,6 +40,15 @@ class Archive:
             analysis TEXT NOT NULL REFERENCES analyses(id),
             packet TEXT NOT NULL,
             packet_digest TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS calibrations(
+            id TEXT PRIMARY KEY,
+            analysis TEXT NOT NULL REFERENCES analyses(id),
+            request TEXT NOT NULL,
+            request_digest TEXT NOT NULL,
+            state TEXT NOT NULL CHECK(state IN ('complete','failed')),
+            record TEXT,
+            error TEXT
         );
         ''')
 
@@ -175,3 +189,69 @@ class Archive:
         if packet['result_digest'] != current['result']['result_digest']:
             raise ValueError('release points to another analysis result')
         return {'label': label, 'analysis': row['analysis'], 'packet': packet}
+
+    def add_calibration(self, ident, analysis_id, control_document):
+        word(ident, 'calibration.id')
+        run = self.analysis(analysis_id)
+        if run['state'] != 'complete':
+            raise Conflict('calibration requires a complete analysis')
+        catalog = Catalog(self.input(run['input'])['document'])
+        request = {'analysis': analysis_id, 'control': control_document}
+        signature = digest(request)
+        with self.atomic():
+            existing = self.db.execute('SELECT * FROM calibrations WHERE id=?', (ident,)).fetchone()
+            if existing and existing['request_digest'] != signature:
+                raise Conflict('calibration id already binds another request')
+        try:
+            record = build_calibration(catalog, run['result'], control_document)
+        except CalibrationError as exc:
+            with self.atomic():
+                self.db.execute(
+                    'INSERT OR REPLACE INTO calibrations(id,analysis,request,request_digest,state,record,error) '
+                    'VALUES(?,?,?,?,?,?,?)',
+                    (ident, analysis_id, canonical(request), signature, 'failed', None,
+                     canonical({'status': exc.status, 'message': str(exc), 'diagnostics': exc.diagnostics})))
+            raise
+        with self.atomic():
+            self.db.execute(
+                'INSERT OR REPLACE INTO calibrations(id,analysis,request,request_digest,state,record,error) '
+                'VALUES(?,?,?,?,?,?,?)',
+                (ident, analysis_id, canonical(request), signature, 'complete',
+                 canonical(record), None))
+        return self.calibration(ident)
+
+    def calibration(self, ident):
+        row = self.db.execute('SELECT * FROM calibrations WHERE id=?', (ident,)).fetchone()
+        if row is None:
+            raise KeyError(ident)
+        value = dict(row)
+        request = json.loads(value['request'])
+        if digest(request) != value['request_digest']:
+            raise ValueError('calibration request integrity failure')
+        value['request'] = request
+        if value['record'] is not None:
+            value['record'] = json.loads(value['record'])
+            record = value['record']
+            if record.get('calibration_digest') != digest(
+                    {k: v for k, v in record.items() if k != 'calibration_digest'}):
+                raise ValueError('calibration record integrity failure')
+        if value['error'] is not None:
+            value['error'] = json.loads(value['error'])
+        return value
+
+    def calibrated_record(self, ident):
+        value = self.calibration(ident)
+        if value['state'] != 'complete':
+            raise CalibrationError(value['error']['status'] if value['error'] else 'failed',
+                                   'calibration did not converge')
+        run = self.analysis(value['analysis'])
+        catalog = Catalog(self.input(run['input'])['document'])
+        binding = value['record']['binding']
+        verify_binding({
+            'input_digest': binding['input_digest'],
+            'result_digest': binding['result_digest'],
+            'reference_date': value['record']['reference_date'],
+            'household_keys': binding['household_keys'],
+            'classification_digest': binding['classification_digest'],
+        }, catalog, run['result'])
+        return value['record']

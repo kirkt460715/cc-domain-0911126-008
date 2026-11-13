@@ -1,53 +1,22 @@
 {
   "reference_date": "2026-11-01",
   "households": [
-    {
-      "household": "h",
-      "region": "east",
-      "income_status": "known",
-      "child_count": 2
-    },
-    {
-      "household": "i",
-      "region": "west",
-      "income_status": "known",
-      "child_count": 1
-    },
-    {
-      "household": "missing",
-      "region": "east",
-      "income_status": "missing",
-      "child_count": 1
-    },
-    {
-      "household": "zero",
-      "region": "west",
-      "income_status": "known",
-      "child_count": 1
-    },
-    {
-      "household": "nonuser",
-      "region": "east",
-      "income_status": "known",
-      "child_count": 0
-    }
+    {"household": "h", "region": "east", "income_status": "known", "child_count": 2},
+    {"household": "i", "region": "west", "income_status": "known", "child_count": 1},
+    {"household": "missing", "region": "east", "income_status": "missing", "child_count": 1},
+    {"household": "zero", "region": "west", "income_status": "known", "child_count": 1},
+    {"household": "nonuser", "region": "east", "income_status": "known", "child_count": 0}
   ],
   "controls": [
-    {
-      "id": "region-east",
-      "dimension": "region",
-      "category": "east",
-      "target": 12
-    },
-    {
-      "id": "region-west",
-      "dimension": "region",
-      "category": "west",
-      "target": 4
-    }
+    {"id": "region-east", "dimension": "region", "category": "east", "target": 12},
+    {"id": "region-west", "dimension": "region", "category": "west", "target": 4},
+    {"id": "income-known", "dimension": "income_status", "category": "known", "target": 10},
+    {"id": "income-missing", "dimension": "income_status", "category": "missing", "target": 6},
+    {"id": "total-children", "dimension": "child_count", "target": 18},
+    {"id": "children-under-12", "dimension": "children_under_12_months", "target": 8},
+    {"id": "children-12-to-23", "dimension": "children_12_to_23_months", "target": 10}
   ],
-  "multiplier_bounds": {
-    "lower": "0.25",
-    "upper": "4"
-  }
+  "multiplier_bounds": {"lower": "0.25", "upper": "4"},
+  "tolerance": 1e-9,
+  "max_iterations": 200
 }

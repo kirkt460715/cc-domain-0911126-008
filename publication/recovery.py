@@ -30,10 +30,26 @@ def audit(archive):
         if run['state'] == 'failed' and not run['error']:
             raise ValueError('failed analysis lacks error')
     releases = [archive.publication(row[0]) for row in archive.db.execute('SELECT label FROM releases')]
+    calibrations = [archive.calibration(row[0]) for row in archive.db.execute('SELECT id FROM calibrations')]
+    for item in calibrations:
+        if item['state'] == 'complete':
+            if item['record'] is None or item['error'] is not None:
+                raise ValueError('complete calibration has incomplete state')
+            record = item['record']
+            run = [r for r in runs if r['id'] == item['analysis']]
+            if not run or run[0]['state'] != 'complete':
+                raise ValueError('calibration points to a non-complete analysis')
+            from tariffs.primitives import digest as _digest
+            if record['calibration_digest'] != _digest(
+                    {k: v for k, v in record.items() if k != 'calibration_digest'}):
+                raise ValueError('calibration record checksum mismatch')
+        elif item['record'] is not None or item['error'] is None:
+            raise ValueError('failed calibration has invalid state')
     if archive.db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='review_cases'").fetchone():
         from publication.review import ReviewDesk
         ReviewDesk(archive).audit()
-    return {'valid': True, 'inputs': len(inputs), 'analyses': len(runs), 'releases': len(releases)}
+    return {'valid': True, 'inputs': len(inputs), 'analyses': len(runs),
+            'releases': len(releases), 'calibrations': len(calibrations)}
 
 
 def backup(archive, destination):

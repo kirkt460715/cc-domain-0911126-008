@@ -89,6 +89,22 @@ def parser():
     restore.add_argument('--source', required=True)
     restore.add_argument('--destination', required=True)
     restore.add_argument('--checksum', required=True)
+    calibrate = commands.add_parser('calibrate')
+    calibrate.add_argument('--input', required=True)
+    calibrate.add_argument('--start', required=True)
+    calibrate.add_argument('--end', required=True)
+    calibrate.add_argument('--controls', required=True)
+    calibrate.add_argument('--endpoint', choices=('low', 'high'), default='low')
+    calibrate.add_argument('--missing', choices=('exclude', 'assume'), default='exclude')
+    calibrate.add_argument('--assumed-income', type=int)
+    calibrate.add_argument('--burden-threshold', default='0.1')
+    calibrate.add_argument('--directory')
+    calibration_export = commands.add_parser('calibration-export')
+    calibration_export.add_argument('--database', required=True)
+    calibration_export.add_argument('--analysis', required=True)
+    calibration_export.add_argument('--calibration', required=True)
+    calibration_export.add_argument('--directory', required=True)
+    calibration_export.add_argument('--burden-threshold', default='0.1')
     api = commands.add_parser('serve')
     api.add_argument('--database', required=True)
     api.add_argument('--token-file', required=True)
@@ -103,6 +119,37 @@ def execute(args):
         return evaluate(Catalog(load(args.input)), args.start, args.end, args.endpoint, args.missing, args.assumed_income)
     if args.command == 'verify-bundle':
         return bundle.verify(args.directory)
+    if args.command == 'calibrate':
+        from analysis.calibration import build_calibration, CalibrationError
+        from analysis.calibrated_report import calibrated_report
+        catalog = Catalog(load(args.input))
+        result = evaluate(catalog, args.start, args.end, args.endpoint,
+                          args.missing, args.assumed_income)
+        controls = load(args.controls)
+        try:
+            record = build_calibration(catalog, result, controls)
+        except CalibrationError as exc:
+            return {'status': exc.status, 'error': str(exc), 'diagnostics': exc.diagnostics}
+        report = calibrated_report(catalog, result, record, args.burden_threshold)
+        output = {'status': record['status'],
+                  'calibration_digest': record['calibration_digest'],
+                  'convergence': record['convergence'],
+                  'constraints': record['constraints'],
+                  'comparison': report}
+        if args.directory:
+            from publication import calibration_bundle
+            output['bundle'] = calibration_bundle.write(
+                catalog, result, record, args.directory, args.burden_threshold)
+        return output
+    if args.command == 'calibration-export':
+        from publication import calibration_bundle
+        with Archive(args.database) as archive:
+            service = Service(archive)
+            result = service.result(args.analysis)
+            catalog = service.source(args.analysis)
+            record = archive.calibrated_record(args.calibration)
+            return calibration_bundle.write(catalog, result, record, args.directory,
+                                            args.burden_threshold)
     if args.command == 'csv-export':
         return tabular.write_directory(load(args.input), args.directory)
     if args.command == 'restore':

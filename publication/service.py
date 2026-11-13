@@ -93,6 +93,12 @@ class Service:
         if command == 'get-release':
             fields(body, ('label',))
             return self.archive.publication(body['label'])
+        if command == 'calibrate':
+            fields(body, ('id', 'analysis', 'controls'))
+            return self.archive.add_calibration(body['id'], body['analysis'], body['controls'])
+        if command == 'get-calibration':
+            fields(body, ('id',))
+            return self.archive.calibration(body['id'])
         if command == 'audit':
             fields(body, ())
             return audit(self.archive)
@@ -180,6 +186,13 @@ class Service:
         if kind == 'budget-sweep':
             fields(options, ('program', 'caps'))
             return budget_sweep(catalog, result, options['program'], options['caps'])
+        if kind == 'calibrated':
+            from analysis.calibrated_report import calibrated_report
+            fields(options, ('calibration',), ('threshold', 'population'))
+            record = self.archive.calibrated_record(options['calibration'])
+            return calibrated_report(catalog, result, record,
+                                     options.get('threshold', '0.1'),
+                                     options.get('population', 'all'))
         if kind == 'sensitivity':
             fields(options, ('cases',))
             return sensitivity(catalog, start, end, options['cases'])
